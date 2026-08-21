@@ -49,12 +49,16 @@ test('POST /graphql maps an upstream failure to a GraphQL error response', async
   assert.equal(res.body.data.author, null);
 });
 
-test('POST /graphql returns 400 for a malformed query', async (t) => {
+// graphql-http follows the GraphQL over HTTP spec: a document that fails to
+// parse is reported in the response body as a GraphQL error with status 200
+// (express-graphql used to answer 400 here).
+test('POST /graphql reports a malformed query as a GraphQL error response', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
   const res = await request(app)
     .post('/graphql')
     .send({ query: '{ author(id: 1077326) { ' })
-    .expect(400);
+    .expect(200);
 
   assert.ok(Array.isArray(res.body.errors) && res.body.errors.length > 0);
+  assert.match(res.body.errors[0].message, /Syntax Error/);
 });

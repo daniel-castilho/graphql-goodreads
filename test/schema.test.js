@@ -34,7 +34,7 @@ test('resolves an author and their books from the Goodreads XML API', async (t) 
     return okResponse(XML_FIXTURE);
   });
 
-  const result = await graphql(schema, AUTHOR_QUERY);
+  const result = await graphql({ schema, source: AUTHOR_QUERY });
 
   assert.equal(result.errors, undefined, 'expected no GraphQL errors');
   assert.equal(result.data.author.name, 'J.K. Rowling');
@@ -49,7 +49,7 @@ test('resolves an author and their books from the Goodreads XML API', async (t) 
 
 test('reports a GraphQL error when the upstream body is not valid XML', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => okResponse('Invalid API key'));
-  const result = await graphql(schema, AUTHOR_QUERY);
+  const result = await graphql({ schema, source: AUTHOR_QUERY });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
   assert.equal(result.data.author, null);
@@ -59,7 +59,7 @@ test('reports a GraphQL error when the upstream request fails', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => {
     throw new Error('network down');
   });
-  const result = await graphql(schema, AUTHOR_QUERY);
+  const result = await graphql({ schema, source: AUTHOR_QUERY });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
   assert.match(result.errors[0].message, /network down/);
@@ -68,7 +68,7 @@ test('reports a GraphQL error when the upstream request fails', async (t) => {
 
 test('reports a GraphQL error when the upstream responds with an error status', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 401, text: async () => 'Invalid API key' }));
-  const result = await graphql(schema, AUTHOR_QUERY);
+  const result = await graphql({ schema, source: AUTHOR_QUERY });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
   assert.match(JSON.stringify(result.errors), /HTTP 401/);
@@ -80,7 +80,7 @@ test('fails with a descriptive error when GOODREADS_API_KEY is not set', async (
   const previous = process.env.GOODREADS_API_KEY;
   delete process.env.GOODREADS_API_KEY;
   try {
-    const result = await graphql(schema, AUTHOR_QUERY);
+    const result = await graphql({ schema, source: AUTHOR_QUERY });
     assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
     assert.match(JSON.stringify(result.errors), /GOODREADS_API_KEY/);
     assert.equal(result.data.author, null);
@@ -91,10 +91,10 @@ test('fails with a descriptive error when GOODREADS_API_KEY is not set', async (
 
 test('rejects a query that uses the wrong argument type', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
-  const result = await graphql(
+  const result = await graphql({
     schema,
-    '{ author(id: "not-a-number") { name } }',
-  );
+    source: '{ author(id: "not-a-number") { name } }',
+  });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
 });
