@@ -1,7 +1,7 @@
 {
   "name": "graphql-goodreads",
   "version": "1.0.0",
-  "description": "A minimal GraphQL API that wraps the Goodreads XML API, exposing authors and their books through a typed schema with interactive GraphiQL documentation.",
+  "description": "A minimal GraphQL API exposing authors and their books through a typed schema with interactive GraphiQL documentation. Pluggable data providers: Open Library (default, key-free) and the legacy Goodreads XML API.",
   "main": "server.js",
   "scripts": {
     "test": "node --test",
@@ -39,6 +39,8 @@
   "keywords": [
     "graphql",
     "goodreads",
+    "openlibrary",
+    "open-library",
     "express",
     "api",
     "books"

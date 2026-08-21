@@ -1,6 +1,7 @@
 const express = require('express')
 const { createHandler } = require('graphql-http/lib/use/express')
 const app = express()
+const { selectedProviderName } = require('./providers')
 const schema = require('./schema')
 
 // Self-contained GraphiQL page; assets are loaded from a public CDN so the
@@ -44,11 +45,19 @@ app.all('/graphql', createHandler({ schema }))
 module.exports = app
 
 if (require.main === module) {
-  if (!process.env.GOODREADS_API_KEY) {
+  let providerName;
+  try {
+    providerName = selectedProviderName();
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
+  if (providerName === 'goodreads' && !process.env.GOODREADS_API_KEY) {
     console.error('Error: GOODREADS_API_KEY environment variable is not set.');
-    console.error('Example: GOODREADS_API_KEY=your-key npm start');
+    console.error('It is only required when BOOK_PROVIDER=goodreads.');
+    console.error('Example: BOOK_PROVIDER=goodreads GOODREADS_API_KEY=your-key npm start');
     process.exit(1);
   }
   app.listen(4000)
-  console.log('Listening...')
+  console.log(`Listening on http://localhost:4000/graphql (provider: ${providerName})...`)
 }

@@ -4,11 +4,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { graphql } = require('graphql');
-const schema = require('../schema');
-
+// Pin the legacy Goodreads provider for this suite. node --test runs each
+// file in its own process, so this cannot leak into other suites.
+process.env.BOOK_PROVIDER = 'goodreads';
 // Most tests need a key present; the "missing key" test deletes it locally.
 process.env.GOODREADS_API_KEY = process.env.GOODREADS_API_KEY || 'test-key';
+
+const { graphql } = require('graphql');
+const schema = require('../schema');
 
 const XML_FIXTURE = fs.readFileSync(
   path.join(__dirname, 'fixtures', 'goodreads-response.xml'),
@@ -17,6 +20,7 @@ const XML_FIXTURE = fs.readFileSync(
 
 const AUTHOR_QUERY = `{
   author(id: 1077326) {
+    id
     name
     books {
       title
@@ -37,6 +41,7 @@ test('resolves an author and their books from the Goodreads XML API', async (t) 
   const result = await graphql({ schema, source: AUTHOR_QUERY });
 
   assert.equal(result.errors, undefined, 'expected no GraphQL errors');
+  assert.equal(result.data.author.id, '1077326');
   assert.equal(result.data.author.name, 'J.K. Rowling');
   assert.equal(result.data.author.books.length, 3);
   assert.equal(result.data.author.books[0].title, "Harry Potter and the Sorcerer's Stone");

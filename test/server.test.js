@@ -7,17 +7,41 @@ const path = require('node:path');
 const request = require('supertest');
 const app = require('../server');
 
-process.env.GOODREADS_API_KEY = process.env.GOODREADS_API_KEY || 'test-key';
+// The default provider is Open Library; no API key is required.
+process.env.BOOK_PROVIDER = process.env.BOOK_PROVIDER || 'openlibrary';
 
-const XML_FIXTURE = fs.readFileSync(
-  path.join(__dirname, 'fixtures', 'goodreads-response.xml'),
+const AUTHOR_JSON = fs.readFileSync(
+  path.join(__dirname, 'fixtures', 'openlibrary', 'author-OL23919A.json'),
+  'utf8',
+);
+const WORKS_JSON = fs.readFileSync(
+  path.join(__dirname, 'fixtures', 'openlibrary', 'works-OL23919A.json'),
+  'utf8',
+);
+const EDITIONS_HP_JSON = fs.readFileSync(
+  path.join(__dirname, 'fixtures', 'openlibrary', 'editions-OL52424W.json'),
+  'utf8',
+);
+const EDITIONS_FB_JSON = fs.readFileSync(
+  path.join(__dirname, 'fixtures', 'openlibrary', 'editions-OL52425W.json'),
   'utf8',
 );
 
 const okResponse = (text) => ({ ok: true, status: 200, text: async () => text });
 
+function mockOpenLibrary(t) {
+  return t.mock.method(globalThis, 'fetch', async (url) => {
+    const u = String(url);
+    if (u.endsWith('/authors/OL23919A.json')) return okResponse(AUTHOR_JSON);
+    if (u.endsWith('/authors/OL23919A/works.json')) return okResponse(WORKS_JSON);
+    if (u.endsWith('/works/OL52424W/editions.json')) return okResponse(EDITIONS_HP_JSON);
+    if (u.endsWith('/works/OL52425W/editions.json')) return okResponse(EDITIONS_FB_JSON);
+    throw new Error(`unexpected upstream URL: ${u}`);
+  });
+}
+
 test('GET /graphql serves the GraphiQL interface', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
+  mockOpenLibrary(t);
   const res = await request(app)
     .get('/graphql')
     .set('Accept', 'text/html')
@@ -27,22 +51,24 @@ test('GET /graphql serves the GraphiQL interface', async (t) => {
 });
 
 test('POST /graphql resolves the author query end to end', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
+  mockOpenLibrary(t);
   const res = await request(app)
     .post('/graphql')
-    .send({ query: '{ author(id: 1077326) { name books { title } } }' })
+    .send({ query: '{ author(id: "OL23919A") { name books { title isbn } } }' })
     .expect(200);
 
-  assert.equal(res.body.data.author.name, 'J.K. Rowling');
-  assert.equal(res.body.data.author.books.length, 3);
-  assert.equal(res.body.data.author.books[0].title, "Harry Potter and the Sorcerer's Stone");
+  assert.equal(res.body.data.author.name, 'J. K. Rowling');
+  assert.equal(res.body.data.author.books.length, 2);
+  assert.equal(res.body.data.author.books[0].isbn, '9780747532699');
 });
 
 test('POST /graphql maps an upstream failure to a GraphQL error response', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () => okResponse('Invalid API key'));
+  t.mock.method(globalThis, 'fetch', async () => {
+    throw new Error('network down');
+  });
   const res = await request(app)
     .post('/graphql')
-    .send({ query: '{ author(id: 1077326) { name } }' })
+    .send({ query: '{ author(id: "OL23919A") { name } }' })
     .expect(200);
 
   assert.ok(Array.isArray(res.body.errors) && res.body.errors.length > 0);
@@ -53,10 +79,10 @@ test('POST /graphql maps an upstream failure to a GraphQL error response', async
 // parse is reported in the response body as a GraphQL error with status 200
 // (express-graphql used to answer 400 here).
 test('POST /graphql reports a malformed query as a GraphQL error response', async (t) => {
-  t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
+  mockOpenLibrary(t);
   const res = await request(app)
     .post('/graphql')
-    .send({ query: '{ author(id: 1077326) { ' })
+    .send({ query: '{ author(id: "OL23919A") { ' })
     .expect(200);
 
   assert.ok(Array.isArray(res.body.errors) && res.body.errors.length > 0);

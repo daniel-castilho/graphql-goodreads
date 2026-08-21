@@ -1,0 +1,16 @@
+{
+  "links": [],
+  "size": 2,
+  "entries": [
+    {
+      "key": "/works/OL52424W",
+      "title": "Harry Potter and the Philosopher's Stone",
+      "authors": [{ "author": { "key": "/authors/OL23919A" } }]
+    },
+    {
+      "key": "/works/OL52425W",
+      "title": "Fantastic Beasts and Where to Find Them",
+      "authors": [{ "author": { "key": "/authors/OL23919A" } }]
+    }
+  ]
+}

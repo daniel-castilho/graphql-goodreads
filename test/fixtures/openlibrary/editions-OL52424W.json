@@ -1,0 +1,15 @@
+{
+  "size": 2,
+  "entries": [
+    {
+      "key": "/books/OL7025068M",
+      "title": "Harry Potter and the Philosopher's Stone",
+      "isbn_13": ["9780747532699"]
+    },
+    {
+      "key": "/books/OL7829616M",
+      "title": "Harry Potter and the Philosopher's Stone (audio)",
+      "isbn_10": ["0807281956"]
+    }
+  ]
+}
