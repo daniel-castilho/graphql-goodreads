@@ -4,23 +4,21 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const proxyquire = require('proxyquire');
 const request = require('supertest');
+const app = require('../server');
+
+process.env.GOODREADS_API_KEY = process.env.GOODREADS_API_KEY || 'test-key';
 
 const XML_FIXTURE = fs.readFileSync(
   path.join(__dirname, 'fixtures', 'goodreads-response.xml'),
   'utf8',
 );
 
-function buildApp(fetchImpl) {
-  const schema = proxyquire('../schema', { 'node-fetch': fetchImpl });
-  return proxyquire('../server', { './schema': schema });
-}
+const okResponse = (text) => ({ ok: true, status: 200, text: async () => text });
 
-const okFetch = async () => ({ ok: true, text: async () => XML_FIXTURE });
-
-test('GET /graphql serves the GraphiQL interface', async () => {
-  const res = await request(buildApp(okFetch))
+test('GET /graphql serves the GraphiQL interface', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
+  const res = await request(app)
     .get('/graphql')
     .set('Accept', 'text/html')
     .expect(200);
@@ -28,8 +26,9 @@ test('GET /graphql serves the GraphiQL interface', async () => {
   assert.match(res.text, /graphiql/i);
 });
 
-test('POST /graphql resolves the author query end to end', async () => {
-  const res = await request(buildApp(okFetch))
+test('POST /graphql resolves the author query end to end', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
+  const res = await request(app)
     .post('/graphql')
     .send({ query: '{ author(id: 1077326) { name books { title } } }' })
     .expect(200);
@@ -39,9 +38,9 @@ test('POST /graphql resolves the author query end to end', async () => {
   assert.equal(res.body.data.author.books[0].title, "Harry Potter and the Sorcerer's Stone");
 });
 
-test('POST /graphql maps an upstream failure to a GraphQL error response', async () => {
-  const failingFetch = async () => ({ ok: true, text: async () => 'Invalid API key' });
-  const res = await request(buildApp(failingFetch))
+test('POST /graphql maps an upstream failure to a GraphQL error response', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => okResponse('Invalid API key'));
+  const res = await request(app)
     .post('/graphql')
     .send({ query: '{ author(id: 1077326) { name } }' })
     .expect(200);
@@ -50,8 +49,9 @@ test('POST /graphql maps an upstream failure to a GraphQL error response', async
   assert.equal(res.body.data.author, null);
 });
 
-test('POST /graphql returns 400 for a malformed query', async () => {
-  const res = await request(buildApp(okFetch))
+test('POST /graphql returns 400 for a malformed query', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
+  const res = await request(app)
     .post('/graphql')
     .send({ query: '{ author(id: 1077326) { ' })
     .expect(400);

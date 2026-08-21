@@ -1,4 +1,3 @@
-const fetch = require("node-fetch");
 const util = require("util");
 const parseXML = util.promisify(require("xml2js").parseString);
 const {
@@ -54,11 +53,24 @@ module.exports = new GraphQLSchema({
 				args: {
 					id: { type: GraphQLInt },
 				},
-				resolve: (root, args) => fetch(
-                    `https://www.goodreads.com/author/show.xml?id=${args.id}&key=35QtkpgN0CnCvvCuKXSWg`
-                )
-                .then(response => response.text())
-                .then(parseXML)
+				resolve: (root, args) => {
+  const apiKey = process.env.GOODREADS_API_KEY;
+  if (!apiKey) {
+    return Promise.reject(
+      new Error('GOODREADS_API_KEY environment variable is not set')
+    );
+  }
+  return fetch(
+    `https://www.goodreads.com/author/show.xml?id=${args.id}&key=${apiKey}`
+  )
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`Goodreads API request failed with HTTP ${response.status}`);
+      }
+      return response.text();
+    })
+    .then(parseXML)
+}
 			},
 		}),
 	}),
