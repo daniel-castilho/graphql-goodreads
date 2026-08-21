@@ -125,3 +125,27 @@ test('rejects a negative author id with a descriptive error', async (t) => {
   assert.match(result.errors[0].message, /positive integer/);
   assert.equal(result.data.author, null);
 });
+
+test('maps an upstream timeout to a descriptive GraphQL error', async (t) => {
+  const previousTimeout = process.env.UPSTREAM_TIMEOUT_MS;
+  process.env.UPSTREAM_TIMEOUT_MS = '50';
+  // Simulate a real fetch that hangs until the abort signal fires.
+  t.mock.method(globalThis, 'fetch', async (url, init) => {
+    assert.ok(init && init.signal instanceof AbortSignal, 'expected an abort signal');
+    return new Promise((resolve, reject) => {
+      init.signal.addEventListener('abort', () =>
+        reject(new DOMException('This operation was aborted', 'AbortError'))
+      );
+    });
+  });
+  try {
+    const result = await graphql({ schema, source: AUTHOR_QUERY });
+
+    assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
+    assert.match(result.errors[0].message, /timed out after 50ms/);
+    assert.equal(result.data.author, null);
+  } finally {
+    if (previousTimeout === undefined) delete process.env.UPSTREAM_TIMEOUT_MS;
+    else process.env.UPSTREAM_TIMEOUT_MS = previousTimeout;
+  }
+});

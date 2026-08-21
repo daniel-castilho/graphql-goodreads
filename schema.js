@@ -1,5 +1,6 @@
 const util = require("util");
 const parseXML = util.promisify(require("xml2js").parseString);
+const { fetchUpstream } = require("./lib/upstream");
 const {
 	GraphQLSchema,
 	GraphQLObjectType,
@@ -67,16 +68,9 @@ module.exports = new GraphQLSchema({
       new Error('GOODREADS_API_KEY environment variable is not set')
     );
   }
-  return fetch(
+  return fetchUpstream(
     `https://www.goodreads.com/author/show.xml?id=${args.id}&key=${apiKey}`
-  )
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error(`Goodreads API request failed with HTTP ${response.status}`);
-      }
-      return response.text();
-    })
-    .then(parseXML)
+  ).then(parseXML)
 }
 			},
 		}),
