@@ -10,9 +10,34 @@ All notable changes to this project are documented in this file. The format is b
 - `AGENTS.md` — project rules for solo and AI-assisted development.
 - `docs/lessons.md` — durable engineering lessons learned the hard way.
 - `.nvmrc` pinning Node 24 for local development.
+- Provider layer (`providers/`) with a swappable `BookProvider` contract behind `author(id)`:
+  **Open Library** (default, JSON, key-free) and the legacy **Goodreads** XML provider, selected
+  at runtime via `BOOK_PROVIDER=openlibrary|goodreads`.
+- Open Library mapping: `author(id)` accepts an author key such as `OL23919A`; books come from
+  `works.json` and each ISBN from the work's first ISBN-13 across its editions (ISBN-10 fallback,
+  `null` otherwise).
+- Input validation on `author(id)` per provider (positive integer vs non-empty author key) with
+  descriptive GraphQL errors.
+- Upstream resilience: 10s `AbortController` timeout on every upstream request (tunable via
+  `UPSTREAM_TIMEOUT_MS`); timeouts, non-OK statuses, unknown authors and malformed payloads map
+  to clean GraphQL errors.
+- In-memory TTL cache (1 hour) for successful author lookups, keyed by provider + id, with lazy
+  eviction and shared in-flight requests (`lib/cache.js`).
+- Self-contained GraphiQL page served on `GET /graphql` when the client accepts `text/html`.
+- Test suites for both providers, provider selection and the cache — 34 offline tests total
+  (`node:test` + `supertest`, global `fetch` mocked via `t.mock.method`).
 
 ### Changed
 - `.env.example` expanded with guidance and production-bar notes.
+- Replaced the unmaintained `express-graphql` with `graphql-http`; upgraded `graphql` from 15 to
+  16 (17 requires Node 22+, which would break the Node 20 CI job).
+- Malformed GraphQL documents now return HTTP 200 with an `errors` array, per the GraphQL over
+  HTTP spec implemented by `graphql-http` (`express-graphql` used to return 400).
+- `GOODREADS_API_KEY` is only required (and only fails fast at startup) when
+  `BOOK_PROVIDER=goodreads`.
+
+### Removed
+- `express-graphql` dependency.
 
 ## [1.0.0] - 2026-08-21
 

@@ -69,6 +69,40 @@ different npm version is not evidence the lockfile is CI-clean.
 
 ---
 
+## `graphql()` takes a single args object since graphql 16 (2026-08-21)
+
+Calling `graphql(schema, source)` — the positional signature of graphql ≤ 15 — on graphql 16
+fails with the misleading `Error: Expected undefined to be a GraphQL schema`: the schema object
+is interpreted as the args object, so `args.schema` is `undefined`. There is no dual-signature
+shim.
+
+**Rule:** after upgrading to graphql 16, call `graphql({ schema, source, ... })` everywhere,
+including tests that exercise the schema directly.
+
+---
+
+## graphql-http answers parse/validation failures with HTTP 200 (2026-08-21)
+
+Migrating from `express-graphql` to `graphql-http`, the "malformed query → 400" test broke:
+`graphql-http` follows the GraphQL over HTTP spec and reports document parse/validation problems
+in the body as a GraphQL `errors` array with status 200 (only request-level problems, e.g. bad
+JSON bodies, get 4xx).
+
+**Rule:** when swapping GraphQL HTTP servers, probe the real status-code behaviour and assert on
+reality; do not carry over status assertions from the previous server.
+
+---
+
+## A provider-level cache makes same-key tests order-dependent (2026-08-21)
+
+After wiring the TTL cache into the shared schema instance, every error-path test reusing the
+same author id as an earlier happy-path test silently received the cached success and failed.
+
+**Rule:** when results are cached by key, give each test scenario its own key (or inject a fresh
+cache/schema per test) so suites stay independent of execution order.
+
+---
+
 ## GitHub Dependabot counts lag the push (2026-08-21)
 
 After pushing a fixed lockfile, the push message and the Dependabot page can briefly show stale
