@@ -1,19 +1,23 @@
 # GraphQL Goodreads
 
-![Node](https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)
+![Node](https://img.shields.io/badge/Node.js-20%2B-339933?style=for-the-badge&logo=node.js&logoColor=white)
 ![Express](https://img.shields.io/badge/Express-4-000000?style=for-the-badge&logo=express&logoColor=white)
-![GraphQL](https://img.shields.io/badge/GraphQL-15-E10098?style=for-the-badge&logo=graphql&logoColor=white)
-![Goodreads](https://img.shields.io/badge/Goodreads_API-372213?style=for-the-badge&logo=goodreads&logoColor=white)
+![GraphQL](https://img.shields.io/badge/GraphQL-16-E10098?style=for-the-badge&logo=graphql&logoColor=white)
+![Open Library](https://img.shields.io/badge/Open_Library_API-default-EF5C25?style=for-the-badge&logo=openlibrary&logoColor=white)
 
-GraphQL Goodreads is a minimal **GraphQL wrapper around the Goodreads XML API**. Instead of
-downloading raw XML and digging through `GoodreadsResponse` documents, clients query a small,
-typed GraphQL schema — `author(id)` returns an author and their books with proper types,
-descriptions and interactive documentation (GraphiQL).
+GraphQL Goodreads is a minimal **GraphQL API for authors and their books**. Instead of digging
+through raw upstream payloads, clients query a small, typed GraphQL schema — `author(id)` returns
+an author and their books with proper types and interactive documentation (GraphiQL).
 
-The project is deliberately small: two files, no database, no caching. Every query hits the
-upstream Goodreads XML API live and maps the response into GraphQL types. It works great as a
-study project for GraphQL schemas, resolvers and integrating a legacy XML API behind a modern
-interface.
+Data comes from a **swappable provider layer**:
+
+- **Open Library** (default) — live, JSON-based and **key-free**.
+- **Goodreads** (legacy) — the original XML API. It is retired (no new developer keys since
+  December 2020), so it is kept as an optional provider for existing keys.
+
+The project is deliberately small: no database, no framework magic. Upstream responses are cached
+in memory for one hour; everything else is fetched live. It works great as a study project for
+GraphQL schemas, resolvers and integrating third-party APIs behind a clean interface.
 
 **Project docs:** [AGENTS.md](AGENTS.md) (rules for solo/AI-assisted development) ·
 [docs/lessons.md](docs/lessons.md) (engineering lessons) · [CHANGELOG.md](CHANGELOG.md).
@@ -34,67 +38,86 @@ interface.
 
 | Category | Technology |
 | :--- | :--- |
-| **Language & Runtime** | ![Node](https://img.shields.io/badge/Node.js-18%2B-339933?style=for-the-badge&logo=node.js&logoColor=white) |
+| **Language & Runtime** | ![Node](https://img.shields.io/badge/Node.js-20%2B-339933?style=for-the-badge&logo=node.js&logoColor=white) |
 | **Web framework** | ![Express](https://img.shields.io/badge/Express-4-000000?style=for-the-badge&logo=express&logoColor=white) |
-| **GraphQL server** | ![GraphQL](https://img.shields.io/badge/GraphQL-15-E10098?style=for-the-badge&logo=graphql&logoColor=white) ![express-graphql](https://img.shields.io/badge/express--graphql-0.11-E10098?style=for-the-badge&logo=graphql&logoColor=white) |
-| **HTTP client** | `node-fetch` 2 |
-| **XML parsing** | `xml2js` 0.6 |
-| **Data source** | [Goodreads XML API](https://www.goodreads.com/api) (`author/show.xml`) |
+| **GraphQL server** | ![GraphQL](https://img.shields.io/badge/GraphQL-16-E10098?style=for-the-badge&logo=graphql&logoColor=white) ![graphql-http](https://img.shields.io/badge/graphql--http-1.x-E10098?style=for-the-badge&logo=graphql&logoColor=white) |
+| **HTTP client** | Native `fetch` (Node 18+, no dependency) |
+| **XML parsing** | `xml2js` 0.6 (Goodreads provider only) |
+| **Data sources** | [Open Library API](https://openlibrary.org/developers/api) (default, key-free) · [Goodreads XML API](https://www.goodreads.com/api) (legacy, key required) |
 | **Dev tooling** | `nodemon` 2 |
 
-- **GraphQL:** schema built with `graphql` 15 primitives (`GraphQLSchema`, `GraphQLObjectType`,
-  `GraphQLList`) and served by `express-graphql` 0.11 at `POST /graphql`.
-- **Upstream:** the `author` resolver fetches `https://www.goodreads.com/author/show.xml?id={id}&key={key}`
-  with `node-fetch`, reads the body as text and parses it with `xml2js.parseString` (promisified).
-- **Interactive docs:** GraphiQL is enabled, so the endpoint doubles as living documentation.
+- **GraphQL:** schema built with `graphql` 16 primitives (`GraphQLSchema`, `GraphQLObjectType`,
+  `GraphQLList`) and served by [`graphql-http`](https://github.com/graphql/graphql-http) at
+  `/graphql` (the successor of the deprecated `express-graphql`).
+- **Interactive docs:** a self-contained GraphiQL page (assets from unpkg) is served on
+  `GET /graphql` when the client accepts `text/html`.
+- **Upstream resilience:** every upstream request runs under an `AbortController` timeout
+  (10s default) and non-OK responses map to descriptive GraphQL errors.
 
 ## Architecture
 
-The application is intentionally flat — two files with clear responsibilities and a single
-integration boundary:
+The application stays flat and small — a thin HTTP layer, a schema factory and a swappable
+provider layer:
 
 ```
 graphql-goodreads/
-├── server.js     HTTP entrypoint — Express app + express-graphql; exposes /graphql with GraphiQL,
-│                 listening on port 4000
-└── schema.js     GraphQL schema and resolvers — defines the types (Author, Book) and the only
-│                 place that talks to the Goodreads XML API and parses XML
-├── package.json
-└── package-lock.json
+├── server.js              HTTP entrypoint — Express + graphql-http at /graphql (GraphiQL on GET),
+│                          listening on port 4000; fails fast on invalid configuration
+├── schema.js              GraphQL schema factory — builds the typed schema (Author, Book) on top
+│                          of the selected BookProvider
+├── providers/             Swappable data sources behind author(id)
+│   ├── index.js           BOOK_PROVIDER selection (+ per-provider TTL cache wiring)
+│   ├── openlibrary.js     Default provider — Open Library JSON API, no key needed
+│   └── goodreads.js       Legacy provider — Goodreads XML API, needs GOODREADS_API_KEY
+├── lib/
+│   ├── upstream.js        fetchUpstream(): native fetch + AbortController timeout + non-OK handling
+│   └── cache.js           TTLCache (Map + timestamps, lazy eviction) and memoize() helper
+├── test/                  node:test suites (offline, deterministic — fetch is always mocked)
+└── fixtures/…             Canned Goodreads XML and Open Library JSON responses
+```
+
+**Provider contract:** every provider exposes `name`, `idType` (`int` or `string`) and
+`getAuthor(id)`, returning a normalized shape:
+
+```json
+{ "id": "…", "name": "…", "books": [{ "title": "…", "isbn": "…" }] }
 ```
 
 **Data flow:**
 
 ```
-Browser / GraphiQL
+Browser / GraphiQL / curl
       │  GraphQL query  (POST /graphql)
       ▼
-express-graphql  (server.js)
+graphql-http  (server.js)
       │  resolver execution
       ▼
-schema.js — Query.author(id) resolver
-      │  node-fetch  GET https://www.goodreads.com/author/show.xml?id={id}&key={key}
+schema.js — Query.author(id)
+      │
       ▼
-Goodreads XML API
-      │  XML document
+providers/index.js — selected provider + 1h in-memory cache
+      │  cache miss
       ▼
-xml2js.parseString  →  typed GraphQL response
+lib/upstream.js — fetchUpstream() with timeout
+      │
+      ├─▶ Open Library   (default): authors/{id}.json → works.json → editions.json
+      └─▶ Goodreads      (legacy):  author/show.xml?id={id}&key={key} → xml2js
 ```
 
 **Boundary rules:**
 
-- `server.js` is pure glue: mount the schema, enable GraphiQL, listen on `4000`. It knows nothing
-  about the network or XML.
-- `schema.js` is the only module that touches the outside world. Its resolvers fetch the XML
-  document, parse it, and expose a typed shape (`Author.name`, `Author.books[].title|isbn`).
-- There is **no database and no caching** — every request calls the upstream XML API live.
+- `server.js` is pure glue: mount the schema handler, serve GraphiQL, listen on `4000`. It knows
+  nothing about providers or upstream APIs.
+- `schema.js` never talks to the network; it maps the normalized provider shape into GraphQL types.
+- Providers own their id semantics, upstream URLs and payload parsing; failures surface as
+  descriptive GraphQL errors.
 
 ## Requirements
 
-- Node.js 18+ (developed and tested on Node 20 and 24)
+- Node.js **20+** (CI runs the test matrix on Node 20, 22 and 24)
 - npm (bundled with Node.js)
-- A valid Goodreads API developer key to fetch real data (see
-  [Getting Started](#getting-started))
+- **No API key needed** for the default Open Library provider. A Goodreads developer key is only
+  required when explicitly switching to the legacy provider (see [Getting Started](#getting-started)).
 
 ## Getting Started
 
@@ -106,50 +129,40 @@ cd graphql-goodreads
 npm install
 ```
 
-### 2. Provide a valid Goodreads API key
-
-> **Important:** Goodreads stopped issuing new developer keys in December 2020 and is retiring
-> the API, so existing keys may stop working at any time. The project fails fast at startup if
-> the key is missing, and reports a clean GraphQL error if the upstream rejects it.
+### 2. Configure the environment (optional)
 
 ```sh
 cp .env.example .env
-# edit .env and set:
-GOODREADS_API_KEY=your_key
 ```
 
-Then start the server with the key in the environment:
+| Variable | Default | Purpose |
+| :--- | :--- | :--- |
+| `BOOK_PROVIDER` | `openlibrary` | Data source: `openlibrary` or `goodreads`. |
+| `GOODREADS_API_KEY` | — | Only required when `BOOK_PROVIDER=goodreads`. The server fails fast without it. |
+| `UPSTREAM_TIMEOUT_MS` | `10000` | Timeout applied to every upstream request. |
 
-```sh
-export $(grep -v '^#' .env | xargs)   # loads .env into the shell (optional)
-npm start
-```
-
-Alternatively, pass it inline:
-
-```sh
-GOODREADS_API_KEY=your_key npm start
-```
-
-**A cleaner long-term approach** — replacing the retired Goodreads API with a live, key-free
-data source (e.g. Open Library) — is tracked in the [Roadmap](#roadmap).
+> **Note on Goodreads:** Goodreads stopped issuing new developer keys in December 2020 and has
+> retired the API, so even existing keys may be rejected (HTTP 401). The legacy provider surfaces
+> this as a clean GraphQL error.
 
 ### 3. Run the server
 
 ```sh
-npm start
+npm start                                   # Open Library (default, no key)
+BOOK_PROVIDER=goodreads GOODREADS_API_KEY=your_key npm start   # legacy Goodreads
 ```
 
-You should see `Listening...` and the API will be available at
-[http://localhost:4000/graphql](http://localhost:4000/graphql).
+You should see `Listening on http://localhost:4000/graphql (provider: …)` and the API will be
+available at [http://localhost:4000/graphql](http://localhost:4000/graphql).
 
 ### 4. Try it
 
 Open the GraphiQL interface and run:
 
 ```graphql
+# Open Library (default): id is an Open Library author key
 {
-  author(id: 1077326) {
+  author(id: "OL23919A") {
     name
     books {
       title
@@ -162,9 +175,23 @@ Open the GraphiQL interface and run:
 Or from the terminal:
 
 ```sh
-curl -X POST http://localhost:4000/graphql \
+curl -s -X POST http://localhost:4000/graphql \
   -H "Content-Type: application/json" \
-  -d '{"query":"{ author(id: 1077326) { name books { title } } }"}'
+  -d '{"query":"{ author(id: \"OL23919A\") { name books { title isbn } } }"}'
+```
+
+With the legacy Goodreads provider the same query uses a numeric id:
+
+```graphql
+{
+  author(id: 1077326) {
+    name
+    books {
+      title
+      isbn
+    }
+  }
+}
 ```
 
 ## Commands
@@ -179,23 +206,25 @@ curl -X POST http://localhost:4000/graphql \
 
 ## Testing
 
-Automated tests are included and run with **Node's built-in test runner** (`node:test`) — no
-extra test framework needed. The Goodreads API is **mocked**, so the suite is fast,
-deterministic and works offline.
+Automated tests run with **Node's built-in test runner** (`node:test`) plus `supertest` for HTTP
+integration. The global `fetch` is mocked with `t.mock.method`, so the suite is fast,
+deterministic and works fully offline — **no network connection and no API key are required**.
+
+Current total: **34 tests** across five suites.
 
 | File | Scope |
 | :--- | :--- |
-| `test/schema.test.js` | Unit tests for the GraphQL schema and resolvers: XML parsing, the `author(id)` query shape and error handling (invalid XML, network failure, wrong argument type). |
-| `test/server.test.js` | HTTP integration tests with `supertest`: GraphiQL is served, `POST /graphql` resolves end-to-end, upstream failures map to GraphQL errors, malformed queries return 400. |
-| `test/fixtures/goodreads-response.xml` | Canned Goodreads XML response shared by both suites. |
+| `test/goodreads.test.js` | Legacy provider through the GraphQL layer: XML parsing, happy path, invalid XML, HTTP errors, missing key, timeout and id validation (`BOOK_PROVIDER=goodreads`). |
+| `test/openlibrary.test.js` | Default provider through the GraphQL layer: works → editions resolution, ISBN fallback rules, unknown author, empty book list, malformed JSON, network error, timeout and id validation. |
+| `test/providers.test.js` | `BOOK_PROVIDER` selection logic: defaults, case-insensitivity and unknown values. |
+| `test/cache.test.js` | TTL cache units (hit, miss, expiry, failure eviction) and cached provider lookups. |
+| `test/server.test.js` | HTTP integration with `supertest`: GraphiQL page, end-to-end query, upstream failure mapping and malformed-query behaviour. |
+| `test/fixtures/` | Canned Goodreads XML and Open Library JSON responses shared by the suites. |
 
 ```sh
 npm test            # run the full suite once
 npm run test:watch  # re-run on file changes
 ```
-
-The upstream `node-fetch` call is stubbed with `proxyquire` (dev dependency), so **no network
-connection and no API key are required to run the tests**.
 
 ## API & Documentation
 
@@ -211,66 +240,73 @@ Every query, argument and type can be explored and executed directly in the brow
 
 | Type | Field | Type | Description |
 | :--- | :--- | :--- | :--- |
-| **Query** | `author` | `Author` | Fetches an author and their books by Goodreads ID. |
-| `Query.author` | `id` | `Int` | The Goodreads author ID (e.g. `1077326`). |
-| **Author** | `name` | `String` | The author's name. |
+| **Query** | `author` | `Author` | Fetches an author and their books. |
+| `Query.author` | `id` | `Int` *or* `String` | Provider-dependent: a positive integer (Goodreads) or an Open Library author key such as `OL23919A` (Open Library). |
+| **Author** | `id` | `String` | The author identifier, as resolved by the provider. |
+| | `name` | `String` | The author's name. |
 | | `books` | `[Book!]!` | The list of books written by the author. |
 | **Book** | `title` | `String` | The book title. |
-| | `isbn` | `String` | The book ISBN. |
+| | `isbn` | `String` | The book ISBN (nullable — see provider semantics below). |
+
+### `author(id)` semantics per provider
+
+| | Open Library (default) | Goodreads (legacy) |
+| :--- | :--- | :--- |
+| **Accepted `id`** | Non-empty string — an Open Library author key, e.g. `"OL23919A"` | Positive integer — a Goodreads author id, e.g. `1077326` |
+| **Where it comes from** | The `…/authors/{key}` URL on openlibrary.org (also shown in author page URLs) | The Goodreads author page URL |
+| **How books are resolved** | `authors/{id}/works.json`; each work's first ISBN-13 across `works/{key}/editions.json` (ISBN-10 fallback) | Parsed from the single `author/show.xml` response |
+| **Missing ISBN** | `isbn` is `null` (never fails the query) | `null` when absent in the XML |
+| **Unknown id** | Descriptive GraphQL error (`not found on Open Library`) | Descriptive GraphQL error with the HTTP status |
+
+Successful results are cached in memory for **1 hour**, keyed by provider and id.
 
 ### Example response
-
-With a valid API key, the shape returned by the `author` query is:
 
 ```json
 {
   "data": {
     "author": {
-      "name": "J.K. Rowling",
+      "id": "OL23919A",
+      "name": "J. K. Rowling",
       "books": [
-        { "title": "Harry Potter and the Sorcerer's Stone", "isbn": "9780439708180" },
-        { "title": "Harry Potter and the Chamber of Secrets", "isbn": "9780439064873" }
+        { "title": "Harry Potter and the Philosopher's Stone", "isbn": "9780747532699" },
+        { "title": "Fantastic Beasts and Where to Find Them", "isbn": null }
       ]
     }
   }
 }
 ```
 
-> Values above are illustrative — the real payload comes from the live Goodreads XML API and
-> depends on the author requested.
+> Values above are illustrative — the real payload comes from the configured provider and depends
+> on the author requested.
 
 ## Current State
 
-- **Working query** — `author(id)` returns the author's name plus a list of `{ title, isbn }`
-  books, mapped from the Goodreads XML response.
-- **GraphiQL enabled** — the endpoint doubles as interactive documentation.
-- **Automated tests** — resolver unit tests (mocked upstream XML) and HTTP integration tests
-  (`supertest`) via the built-in `node:test` runner; 10 tests, offline and deterministic, using
-  `node:test` built-in mocks (`t.mock.method`) instead of a mocking library.
-- **Secrets hygiene** — the Goodreads API key is read from the `GOODREADS_API_KEY` environment
-  variable (never hardcoded); `server.js` fails fast at startup if it is missing, and upstream
-  non-OK responses map to a descriptive GraphQL error. `.env` is gitignored; a tracked
-  `.env.example` shows the expected shape.
-- **Dependency hygiene** — the dependency tree is patched and up to date: `npm audit` reports
-  **0 vulnerabilities** (including the fixes for GHSA-3jxr-9vmj-r5cp / CVE-2026-13149 and the
-  other `brace-expansion`, `minimatch`, `semver`, `express`, `xml2js` advisories).
-- **Known limitation** — the Goodreads API is retired (no new keys since Dec 2020), so even a
-  valid key may be rejected (HTTP 401). The API surfaces this as a clean GraphQL error, and a
-  live, key-free data source is planned in the [Roadmap](#roadmap).
+- **Working query** — `author(id)` returns `{ id, name, books { title, isbn } }` from the selected
+  provider.
+- **Provider abstraction** — Open Library (JSON, key-free) is the default data source; the legacy
+  Goodreads XML provider remains selectable via `BOOK_PROVIDER=goodreads`.
+- **Maintained GraphQL stack** — `graphql` 16 served by `graphql-http`, with a self-contained
+  GraphiQL page on `GET /graphql`.
+- **Input validation** — ids are validated per provider (positive integer vs non-empty author key)
+  with descriptive GraphQL errors.
+- **Upstream resilience** — 10s `AbortController` timeout (tunable via `UPSTREAM_TIMEOUT_MS`),
+  non-OK statuses, timeouts, unknown authors and malformed payloads all map to clean GraphQL
+  errors.
+- **In-memory caching** — successful author lookups are cached for one hour (lazy eviction,
+  concurrent lookups share the in-flight request).
+- **Automated tests** — 34 offline tests across five suites using `node:test` built-in mocks
+  (`t.mock.method`) and `supertest`; CI runs them on Node 20/22/24.
+- **Secrets hygiene** — `GOODREADS_API_KEY` is read from the environment (never hardcoded) and is
+  only required for the legacy provider; `.env` is gitignored and `.env.example` documents the
+  expected shape.
+- **Dependency hygiene** — `npm audit --audit-level=high` reports **0 vulnerabilities** (CI gate).
 
 ## Roadmap
 
 Deliberately not implemented yet (candidate backlog):
 
-- Graceful upstream failure handling: timeouts (non-OK responses and malformed XML are already
-  covered)
-- Replace `express-graphql` (deprecated/unmaintained) with `graphql-http` or another maintained
-  GraphQL server
-- Replace the retired Goodreads API with a live, key-free data source (e.g. Open Library) behind
-  a small provider abstraction, so the project returns real data again
-- Expand test coverage — edge-case XML payloads (missing ISBN, author without books) and
-  paginated/batched queries
-- More queries: book by ID, author search, reviews and shelves
-- Optional in-memory TTL cache, since the legacy Goodreads XML API is slow
+- Pagination controls for large authors (currently all works are resolved in one query)
+- More queries: book by key/id, author search (Open Library `search/authors.json`), covers
 - Dockerfile (CI pipeline already in place via GitHub Actions)
 - TypeScript migration
