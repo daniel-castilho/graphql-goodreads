@@ -91,11 +91,15 @@ test('reports a descriptive error for an unknown author', async (t) => {
 test('returns an empty book list for an author without works', async (t) => {
   t.mock.method(globalThis, 'fetch', async (url) => {
     const u = String(url);
-    if (u.endsWith('/authors/OL23919A.json')) return okResponse(AUTHOR_JSON);
-    if (u.endsWith('/authors/OL23919A/works.json')) return okResponse('{}');
+    // Distinct id per scenario: provider results are cached by id.
+    if (u.endsWith('/authors/OL1111111A.json')) return okResponse(AUTHOR_JSON);
+    if (u.endsWith('/authors/OL1111111A/works.json')) return okResponse('{}');
     throw new Error(`unexpected upstream URL: ${u}`);
   });
-  const result = await graphql({ schema, source: AUTHOR_QUERY });
+  const result = await graphql({
+    schema,
+    source: '{ author(id: "OL1111111A") { name books { title isbn } } }',
+  });
 
   assert.equal(result.errors, undefined);
   assert.deepEqual(result.data.author.books, []);
@@ -104,8 +108,8 @@ test('returns an empty book list for an author without works', async (t) => {
 test('omits the isbn when a work has no editions with ISBNs', async (t) => {
   t.mock.method(globalThis, 'fetch', async (url) => {
     const u = String(url);
-    if (u.endsWith('/authors/OL23919A.json')) return okResponse(AUTHOR_JSON);
-    if (u.endsWith('/authors/OL23919A/works.json')) {
+    if (u.endsWith('/authors/OL2222222A.json')) return okResponse(AUTHOR_JSON);
+    if (u.endsWith('/authors/OL2222222A/works.json')) {
       return okResponse(
         JSON.stringify({ size: 1, entries: [{ key: '/works/OL52425W', title: 'Some Work' }] })
       );
@@ -113,7 +117,10 @@ test('omits the isbn when a work has no editions with ISBNs', async (t) => {
     if (u.endsWith('/works/OL52425W/editions.json')) return okResponse(EDITIONS_NO_ISBN_JSON);
     throw new Error(`unexpected upstream URL: ${u}`);
   });
-  const result = await graphql({ schema, source: AUTHOR_QUERY });
+  const result = await graphql({
+    schema,
+    source: '{ author(id: "OL2222222A") { name books { title isbn } } }',
+  });
 
   assert.equal(result.errors, undefined);
   assert.equal(result.data.author.books.length, 1);
@@ -122,7 +129,10 @@ test('omits the isbn when a work has no editions with ISBNs', async (t) => {
 
 test('reports a GraphQL error when the upstream body is not valid JSON', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => okResponse('<html>boom</html>'));
-  const result = await graphql({ schema, source: AUTHOR_QUERY });
+  const result = await graphql({
+    schema,
+    source: '{ author(id: "OL3333333A") { name } }',
+  });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
   assert.match(result.errors[0].message, /malformed JSON/);
@@ -133,7 +143,10 @@ test('reports a GraphQL error when the upstream request fails', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => {
     throw new Error('network down');
   });
-  const result = await graphql({ schema, source: AUTHOR_QUERY });
+  const result = await graphql({
+    schema,
+    source: '{ author(id: "OL4444444A") { name } }',
+  });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
   assert.match(result.errors[0].message, /network down/);
@@ -153,7 +166,10 @@ test('maps an upstream timeout to a descriptive GraphQL error', async (t) => {
     });
   });
   try {
-    const result = await graphql({ schema, source: AUTHOR_QUERY });
+    const result = await graphql({
+      schema,
+      source: '{ author(id: "OL5555555A") { name } }',
+    });
 
     assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
     assert.match(result.errors[0].message, /timed out after 50ms/);

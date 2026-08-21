@@ -68,7 +68,7 @@ test('POST /graphql maps an upstream failure to a GraphQL error response', async
   });
   const res = await request(app)
     .post('/graphql')
-    .send({ query: '{ author(id: "OL23919A") { name } }' })
+    .send({ query: '{ author(id: "OL7777777X") { name } }' })
     .expect(200);
 
   assert.ok(Array.isArray(res.body.errors) && res.body.errors.length > 0);

@@ -14,6 +14,7 @@
 
 const GoodreadsProvider = require('./goodreads');
 const OpenLibraryProvider = require('./openlibrary');
+const { TTLCache, memoize } = require('../lib/cache');
 
 const PROVIDER_CLASSES = {
   openlibrary: OpenLibraryProvider,
@@ -23,8 +24,19 @@ const PROVIDER_CLASSES = {
 // Resolves the BOOK_PROVIDER environment variable ("openlibrary" |
 // "goodreads") to a provider instance. Defaults to "openlibrary", which
 // needs no API key. Throws a descriptive error for unknown values.
+//
+// The returned provider caches getAuthor results in memory for one hour,
+// keyed by provider name and author id.
 function selectProvider(source = process.env.BOOK_PROVIDER) {
-  return new (providerClassFor(source))();
+  const provider = new (providerClassFor(source))();
+  const cache = new TTLCache();
+  const getAuthor = provider.getAuthor.bind(provider);
+  provider.getAuthor = memoize(
+    getAuthor,
+    (id) => `${provider.name}:author:${id}`,
+    cache
+  );
+  return provider;
 }
 
 // Normalized name of the configured provider without constructing it.

@@ -54,7 +54,8 @@ test('resolves an author and their books from the Goodreads XML API', async (t) 
 
 test('reports a GraphQL error when the upstream body is not valid XML', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => okResponse('Invalid API key'));
-  const result = await graphql({ schema, source: AUTHOR_QUERY });
+  // Distinct id per scenario: provider results are cached by id.
+  const result = await graphql({ schema, source: '{ author(id: 1111111) { name } }' });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
   assert.equal(result.data.author, null);
@@ -64,7 +65,7 @@ test('reports a GraphQL error when the upstream request fails', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => {
     throw new Error('network down');
   });
-  const result = await graphql({ schema, source: AUTHOR_QUERY });
+  const result = await graphql({ schema, source: '{ author(id: 2222222) { name } }' });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
   assert.match(result.errors[0].message, /network down/);
@@ -73,7 +74,7 @@ test('reports a GraphQL error when the upstream request fails', async (t) => {
 
 test('reports a GraphQL error when the upstream responds with an error status', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 401, text: async () => 'Invalid API key' }));
-  const result = await graphql({ schema, source: AUTHOR_QUERY });
+  const result = await graphql({ schema, source: '{ author(id: 3333333) { name } }' });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
   assert.match(JSON.stringify(result.errors), /HTTP 401/);
@@ -85,7 +86,7 @@ test('fails with a descriptive error when GOODREADS_API_KEY is not set', async (
   const previous = process.env.GOODREADS_API_KEY;
   delete process.env.GOODREADS_API_KEY;
   try {
-    const result = await graphql({ schema, source: AUTHOR_QUERY });
+    const result = await graphql({ schema, source: '{ author(id: 4444444) { name } }' });
     assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
     assert.match(JSON.stringify(result.errors), /GOODREADS_API_KEY/);
     assert.equal(result.data.author, null);
@@ -144,7 +145,7 @@ test('maps an upstream timeout to a descriptive GraphQL error', async (t) => {
     });
   });
   try {
-    const result = await graphql({ schema, source: AUTHOR_QUERY });
+    const result = await graphql({ schema, source: '{ author(id: 5555555) { name } }' });
 
     assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
     assert.match(result.errors[0].message, /timed out after 50ms/);
