@@ -54,6 +54,13 @@ module.exports = new GraphQLSchema({
 					id: { type: GraphQLInt },
 				},
 				resolve: (root, args) => {
+  if (!Number.isInteger(args.id) || args.id <= 0) {
+    return Promise.reject(
+      new Error(
+        `The "id" argument must be a positive integer, got ${JSON.stringify(args.id ?? null)}`
+      )
+    );
+  }
   const apiKey = process.env.GOODREADS_API_KEY;
   if (!apiKey) {
     return Promise.reject(

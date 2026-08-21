@@ -98,3 +98,30 @@ test('rejects a query that uses the wrong argument type', async (t) => {
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
 });
+
+test('rejects a missing author id with a descriptive error', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
+  const result = await graphql({ schema, source: '{ author { name } }' });
+
+  assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
+  assert.match(result.errors[0].message, /positive integer/);
+  assert.equal(result.data.author, null);
+});
+
+test('rejects a zero author id with a descriptive error', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
+  const result = await graphql({ schema, source: '{ author(id: 0) { name } }' });
+
+  assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
+  assert.match(result.errors[0].message, /positive integer/);
+  assert.equal(result.data.author, null);
+});
+
+test('rejects a negative author id with a descriptive error', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
+  const result = await graphql({ schema, source: '{ author(id: -1) { name } }' });
+
+  assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
+  assert.match(result.errors[0].message, /positive integer/);
+  assert.equal(result.data.author, null);
+});
