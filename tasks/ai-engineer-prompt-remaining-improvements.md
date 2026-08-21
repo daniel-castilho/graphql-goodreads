@@ -1,5 +1,14 @@
 # GraphQL Goodreads — Remaining Improvements (AI Agent Task)
 
+> **Status:** Implemented and merged — released as [1.0.0] on 2026-08-21 (see `CHANGELOG.md`).
+> Everything this prompt asked for has been delivered: secrets & native `fetch`, migration to
+> `graphql-http` + `graphql@16`, input validation, upstream timeout, the provider abstraction
+> with Open Library as the default key-free source, and the in-memory TTL cache. **Do not re-run
+> this prompt as-is** — the body below is kept for historical reference only.
+>
+> **Remaining work:** the open backlog lives in `README.md` → "Roadmap" (pagination controls,
+> more queries — book by key/id, author search, covers — Dockerfile, TypeScript migration).
+
 ## Role
 
 You are a senior Node.js engineer. You are working on the public GitHub repository
@@ -16,29 +25,33 @@ with tests**, keeping the existing CI green and the repository in a clean, shipp
 3. `docs/lessons.md` — hard-won rules (test runner invocation, git add, npm overrides, lockfile,
    Dependabot lag).
 4. `package.json` and `.github/workflows/ci.yml` — scripts, dependencies, CI gate.
-5. Code: `server.js`, `schema.js`, `test/schema.test.js`, `test/server.test.js`.
+5. Code: `server.js`, `schema.js`, `providers/`, `lib/`, `test/`.
 
 ## Repository context
 
-- **Stack:** Node.js (`engines.node: ">=20"`, CI matrix 20/22/24), Express 4, `express-graphql`
-  0.11, `graphql` 15, `xml2js`, native global `fetch` (Node 18+).
-- **Secrets:** the Goodreads API key is already read from the `GOODREADS_API_KEY` environment
-  variable; `server.js` fails fast at startup when it is missing. `.env.example` is the tracked
-  template; `.env` / `.env.*` are gitignored.
+- **Stack:** Node.js (`engines.node: ">=20"`, CI matrix 20/22/24), Express 4, `graphql-http`
+  1.23, `graphql` 16, `xml2js` (Goodreads provider only), native global `fetch` (Node 18+).
+- **Secrets:** the Goodreads API key is read from the `GOODREADS_API_KEY` environment variable
+  and is only required when `BOOK_PROVIDER=goodreads`; the server fails fast at startup on
+  invalid configuration. `.env.example` is the tracked template; `.env` / `.env.*` are gitignored.
 - **Tests:** Node's built-in test runner (`node --test` — **no directory argument**, see
   `docs/lessons.md`) + `supertest`. The global `fetch` is mocked with `t.mock.method` — tests
   never hit the real network.
 - **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs `npm ci` → `npm test` →
   `npm audit --audit-level=high` on Node 20 / 22 / 24 for every push to `master` and every PR.
 - **Current feature set:** a single query `author(id)` returning
-  `{ name, books { title, isbn } }`, fetched live from the Goodreads XML API.
+  `{ id, name, books { title, isbn } }`, served by a swappable provider layer — Open Library
+  (default, key-free JSON) or Goodreads (legacy XML, needs the key) — selected via
+  `BOOK_PROVIDER`. Upstream requests run under a 10 s timeout (`lib/upstream.js`) and successful
+  lookups are cached in memory for one hour (`lib/cache.js`). 34 offline tests across five suites.
 - **Important:** the Goodreads public API is **retired** (no new developer keys since Dec 2020,
-  API in shutdown). The project already surfaces this as a clean GraphQL error.
+  API in shutdown). It is kept as an optional legacy provider and surfaces failures as a clean
+  GraphQL error.
 
 ## Constraints (non-negotiable)
 
 1. All deliverables in English.
-2. Obey `AGENTS.md` (English only, no secrets in code, doc-sync is part of Done, no push
+2. Obey `AGENTS.md` (English only, no secrets in code, documentation never drifts, no push
    without being asked).
 3. Keep **Node >= 20 support** (CI matrix 20/22/24). Do not bump engines to something that
    breaks Node 20; do not use `graphql@17` (requires Node 22+).

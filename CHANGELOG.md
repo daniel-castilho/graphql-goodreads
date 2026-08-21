@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file. The format is b
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- Docs reconciliation with the v1.0.0 state: `AGENTS.md` now describes the provider-based
+  architecture (intro, Commands, Architecture, technical-debt list) and elevates doc sync to
+  **GOLDEN RULE #1 — documentation never drifts**; the archived task prompt under `tasks/`
+  carries a status banner marking its steps as implemented.
+
 ## [1.0.0] - 2026-08-21
 
 ### Security
