@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<GoodreadsResponse>
+  <author>
+    <id>1077326</id>
+    <name>J.K. Rowling</name>
+    <books>
+      <book>
+        <title>Harry Potter and the Sorcerer's Stone</title>
+        <isbn>9780439708180</isbn>
+      </book>
+      <book>
+        <title>Harry Potter and the Chamber of Secrets</title>
+        <isbn>9780439064873</isbn>
+      </book>
+      <book>
+        <title>Harry Potter and the Prisoner of Azkaban</title>
+        <isbn>9780439136365</isbn>
+      </book>
+    </books>
+  </author>
+</GoodreadsResponse>

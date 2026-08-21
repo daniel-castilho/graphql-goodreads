@@ -9,5 +9,9 @@ app.use('/graphql', graphqlHTTP({
     graphiql: true,
 }))
 
-app.listen(4000)
-console.log('Listening...')
+module.exports = app
+
+if (require.main === module) {
+  app.listen(4000)
+  console.log('Listening...')
+}
