@@ -11,7 +11,12 @@ process.env.BOOK_PROVIDER = 'goodreads';
 process.env.GOODREADS_API_KEY = process.env.GOODREADS_API_KEY || 'test-key';
 
 const { graphql } = require('graphql');
-const schema = require('../schema');
+const { buildSchema } = require('../schema');
+const { selectProvider } = require('../providers');
+
+// A fresh schema (and therefore a fresh provider + TTL cache) per test keeps
+// scenarios independent: the same author id can be reused across tests.
+const freshSchema = () => buildSchema(selectProvider());
 
 const XML_FIXTURE = fs.readFileSync(
   path.join(__dirname, 'fixtures', 'goodreads-response.xml'),
@@ -32,6 +37,7 @@ const AUTHOR_QUERY = `{
 const okResponse = (text) => ({ ok: true, status: 200, text: async () => text });
 
 test('resolves an author and their books from the Goodreads XML API', async (t) => {
+  const schema = freshSchema();
   const calls = [];
   t.mock.method(globalThis, 'fetch', async (url) => {
     calls.push(String(url));
@@ -53,19 +59,20 @@ test('resolves an author and their books from the Goodreads XML API', async (t) 
 });
 
 test('reports a GraphQL error when the upstream body is not valid XML', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async () => okResponse('Invalid API key'));
-  // Distinct id per scenario: provider results are cached by id.
-  const result = await graphql({ schema, source: '{ author(id: 1111111) { name } }' });
+  const result = await graphql({ schema, source: '{ author(id: 1077326) { name } }' });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
   assert.equal(result.data.author, null);
 });
 
 test('reports a GraphQL error when the upstream request fails', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async () => {
     throw new Error('network down');
   });
-  const result = await graphql({ schema, source: '{ author(id: 2222222) { name } }' });
+  const result = await graphql({ schema, source: '{ author(id: 1077326) { name } }' });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
   assert.match(result.errors[0].message, /network down/);
@@ -73,8 +80,9 @@ test('reports a GraphQL error when the upstream request fails', async (t) => {
 });
 
 test('reports a GraphQL error when the upstream responds with an error status', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async () => ({ ok: false, status: 401, text: async () => 'Invalid API key' }));
-  const result = await graphql({ schema, source: '{ author(id: 3333333) { name } }' });
+  const result = await graphql({ schema, source: '{ author(id: 1077326) { name } }' });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
   assert.match(JSON.stringify(result.errors), /HTTP 401/);
@@ -82,11 +90,12 @@ test('reports a GraphQL error when the upstream responds with an error status', 
 });
 
 test('fails with a descriptive error when GOODREADS_API_KEY is not set', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
   const previous = process.env.GOODREADS_API_KEY;
   delete process.env.GOODREADS_API_KEY;
   try {
-    const result = await graphql({ schema, source: '{ author(id: 4444444) { name } }' });
+    const result = await graphql({ schema, source: '{ author(id: 1077326) { name } }' });
     assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
     assert.match(JSON.stringify(result.errors), /GOODREADS_API_KEY/);
     assert.equal(result.data.author, null);
@@ -96,6 +105,7 @@ test('fails with a descriptive error when GOODREADS_API_KEY is not set', async (
 });
 
 test('rejects a query that uses the wrong argument type', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
   const result = await graphql({
     schema,
@@ -106,6 +116,7 @@ test('rejects a query that uses the wrong argument type', async (t) => {
 });
 
 test('rejects a missing author id with a descriptive error', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
   const result = await graphql({ schema, source: '{ author { name } }' });
 
@@ -115,6 +126,7 @@ test('rejects a missing author id with a descriptive error', async (t) => {
 });
 
 test('rejects a zero author id with a descriptive error', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
   const result = await graphql({ schema, source: '{ author(id: 0) { name } }' });
 
@@ -124,6 +136,7 @@ test('rejects a zero author id with a descriptive error', async (t) => {
 });
 
 test('rejects a negative author id with a descriptive error', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async () => okResponse(XML_FIXTURE));
   const result = await graphql({ schema, source: '{ author(id: -1) { name } }' });
 
@@ -133,6 +146,7 @@ test('rejects a negative author id with a descriptive error', async (t) => {
 });
 
 test('maps an upstream timeout to a descriptive GraphQL error', async (t) => {
+  const schema = freshSchema();
   const previousTimeout = process.env.UPSTREAM_TIMEOUT_MS;
   process.env.UPSTREAM_TIMEOUT_MS = '50';
   // Simulate a real fetch that hangs until the abort signal fires.
@@ -145,7 +159,7 @@ test('maps an upstream timeout to a descriptive GraphQL error', async (t) => {
     });
   });
   try {
-    const result = await graphql({ schema, source: '{ author(id: 5555555) { name } }' });
+    const result = await graphql({ schema, source: '{ author(id: 1077326) { name } }' });
 
     assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
     assert.match(result.errors[0].message, /timed out after 50ms/);

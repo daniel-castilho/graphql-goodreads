@@ -5,8 +5,6 @@ const assert = require('node:assert/strict');
 const { TTLCache, memoize } = require('../lib/cache');
 const { selectProvider } = require('../providers');
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
 test('TTLCache returns undefined on a miss', () => {
   const cache = new TTLCache();
   assert.equal(cache.get('missing'), undefined);
@@ -20,12 +18,14 @@ test('TTLCache serves a stored value on a hit', () => {
   assert.equal(cache.size, 1);
 });
 
-test('TTLCache expires entries after the TTL and evicts lazily', async () => {
-  const cache = new TTLCache({ ttlMs: 20 });
+test('TTLCache expires entries after the TTL and evicts lazily', (t) => {
+  // Freeze Date so expiry is deterministic — no real waiting, no flakiness.
+  t.mock.timers.enable({ apis: ['Date'] });
+  const cache = new TTLCache({ ttlMs: 1000 });
   cache.set('key', 'value');
   assert.equal(cache.get('key'), 'value');
 
-  await sleep(40);
+  t.mock.timers.tick(1001);
 
   assert.equal(cache.get('key'), undefined, 'entry should be expired');
   assert.equal(cache.size, 0, 'expired entry should be evicted on access');

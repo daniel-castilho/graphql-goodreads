@@ -44,6 +44,7 @@ Re-read the relevant parts before starting any task.
 | Run the dev server (port 4000) | `npm start` |
 | Run the test suite (once) | `npm test` |
 | Run tests in watch mode | `npm run test:watch` |
+| Test coverage (built-in V8 report) | `npm run test:coverage` |
 | Security audit | `npm audit` |
 
 > `npm start` runs key-free with the default Open Library provider. It fails fast at startup on

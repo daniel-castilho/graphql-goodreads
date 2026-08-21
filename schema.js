@@ -75,4 +75,8 @@ function buildSchema(provider) {
   });
 }
 
+// Default schema used by server.js and integration tests. Tests that need
+// isolation from the provider-level TTL cache can build their own instance
+// via module.exports.buildSchema(selectProvider()).
 module.exports = buildSchema(selectProvider());
+module.exports.buildSchema = buildSchema;

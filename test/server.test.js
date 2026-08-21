@@ -50,6 +50,30 @@ test('GET /graphql serves the GraphiQL interface', async (t) => {
   assert.match(res.text, /graphiql/i);
 });
 
+// Without Accept: text/html the request must fall through to graphql-http
+// instead of rendering the GraphiQL page. graphql-http rejects a GET without
+// a query with HTTP 400 and a JSON error payload.
+test('GET /graphql without Accept: text/html falls through to graphql-http', async (t) => {
+  mockOpenLibrary(t);
+  const res = await request(app)
+    .get('/graphql')
+    .expect(400);
+
+  assert.match(res.headers['content-type'], /application\/json/);
+  assert.ok(Array.isArray(res.body.errors), 'expected a GraphQL error payload');
+});
+
+test('POST /graphql responds with application/json', async (t) => {
+  mockOpenLibrary(t);
+  const res = await request(app)
+    .post('/graphql')
+    .send({ query: '{ author(id: "OL23919A") { name } }' })
+    .expect(200);
+
+  assert.match(res.headers['content-type'], /application\/json/);
+  assert.equal(res.body.data.author.name, 'J. K. Rowling');
+});
+
 test('POST /graphql resolves the author query end to end', async (t) => {
   mockOpenLibrary(t);
   const res = await request(app)

@@ -5,11 +5,15 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { graphql } = require('graphql');
+const { buildSchema } = require('../schema');
+const { selectProvider } = require('../providers');
 
 // Default provider; pinned explicitly for clarity.
 process.env.BOOK_PROVIDER = 'openlibrary';
 
-const schema = require('../schema');
+// A fresh schema (and therefore a fresh provider + TTL cache) per test keeps
+// scenarios independent: the same author id can be reused across tests.
+const freshSchema = () => buildSchema(selectProvider());
 
 const FIXTURES = path.join(__dirname, 'fixtures', 'openlibrary');
 const readFixture = (name) => fs.readFileSync(path.join(FIXTURES, name), 'utf8');
@@ -50,6 +54,7 @@ function mockOpenLibrary(t) {
 }
 
 test('resolves an author and their works from the Open Library API', async (t) => {
+  const schema = freshSchema();
   const { urls } = mockOpenLibrary(t);
 
   const result = await graphql({ schema, source: AUTHOR_QUERY });
@@ -72,6 +77,7 @@ test('resolves an author and their works from the Open Library API', async (t) =
 });
 
 test('reports a descriptive error for an unknown author', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async (url) => {
     if (String(url).endsWith('/authors/OL0000000X.json')) {
       return { ok: false, status: 404, text: async () => 'not found' };
@@ -89,9 +95,9 @@ test('reports a descriptive error for an unknown author', async (t) => {
 });
 
 test('returns an empty book list for an author without works', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async (url) => {
     const u = String(url);
-    // Distinct id per scenario: provider results are cached by id.
     if (u.endsWith('/authors/OL1111111A.json')) return okResponse(AUTHOR_JSON);
     if (u.endsWith('/authors/OL1111111A/works.json')) return okResponse('{}');
     throw new Error(`unexpected upstream URL: ${u}`);
@@ -106,6 +112,7 @@ test('returns an empty book list for an author without works', async (t) => {
 });
 
 test('omits the isbn when a work has no editions with ISBNs', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async (url) => {
     const u = String(url);
     if (u.endsWith('/authors/OL2222222A.json')) return okResponse(AUTHOR_JSON);
@@ -128,10 +135,11 @@ test('omits the isbn when a work has no editions with ISBNs', async (t) => {
 });
 
 test('reports a GraphQL error when the upstream body is not valid JSON', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async () => okResponse('<html>boom</html>'));
   const result = await graphql({
     schema,
-    source: '{ author(id: "OL3333333A") { name } }',
+    source: '{ author(id: "OL23919A") { name } }',
   });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
@@ -140,12 +148,13 @@ test('reports a GraphQL error when the upstream body is not valid JSON', async (
 });
 
 test('reports a GraphQL error when the upstream request fails', async (t) => {
+  const schema = freshSchema();
   t.mock.method(globalThis, 'fetch', async () => {
     throw new Error('network down');
   });
   const result = await graphql({
     schema,
-    source: '{ author(id: "OL4444444A") { name } }',
+    source: '{ author(id: "OL23919A") { name } }',
   });
 
   assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
@@ -154,6 +163,7 @@ test('reports a GraphQL error when the upstream request fails', async (t) => {
 });
 
 test('maps an upstream timeout to a descriptive GraphQL error', async (t) => {
+  const schema = freshSchema();
   const previousTimeout = process.env.UPSTREAM_TIMEOUT_MS;
   process.env.UPSTREAM_TIMEOUT_MS = '50';
   // Simulate a real fetch that hangs until the abort signal fires.
@@ -168,7 +178,7 @@ test('maps an upstream timeout to a descriptive GraphQL error', async (t) => {
   try {
     const result = await graphql({
       schema,
-      source: '{ author(id: "OL5555555A") { name } }',
+      source: '{ author(id: "OL23919A") { name } }',
     });
 
     assert.ok(Array.isArray(result.errors) && result.errors.length > 0);
@@ -181,6 +191,7 @@ test('maps an upstream timeout to a descriptive GraphQL error', async (t) => {
 });
 
 test('rejects a missing author id with a descriptive error', async (t) => {
+  const schema = freshSchema();
   mockOpenLibrary(t);
   const result = await graphql({ schema, source: '{ author { name } }' });
 
@@ -190,6 +201,7 @@ test('rejects a missing author id with a descriptive error', async (t) => {
 });
 
 test('rejects an empty author id with a descriptive error', async (t) => {
+  const schema = freshSchema();
   mockOpenLibrary(t);
   const result = await graphql({ schema, source: '{ author(id: "") { name } }' });
 

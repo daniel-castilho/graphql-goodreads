@@ -43,7 +43,7 @@ with tests**, keeping the existing CI green and the repository in a clean, shipp
   `{ id, name, books { title, isbn } }`, served by a swappable provider layer — Open Library
   (default, key-free JSON) or Goodreads (legacy XML, needs the key) — selected via
   `BOOK_PROVIDER`. Upstream requests run under a 10 s timeout (`lib/upstream.js`) and successful
-  lookups are cached in memory for one hour (`lib/cache.js`). 34 offline tests across five suites.
+  lookups are cached in memory for one hour (`lib/cache.js`). 36 offline tests across five suites.
 - **Important:** the Goodreads public API is **retired** (no new developer keys since Dec 2020,
   API in shutdown). It is kept as an optional legacy provider and surfaces failures as a clean
   GraphQL error.

@@ -202,6 +202,7 @@ With the legacy Goodreads provider the same query uses a numeric id:
 | Run the dev server on port 4000 | `npm start` |
 | Run the test suite | `npm test` |
 | Run tests in watch mode | `npm run test:watch` |
+| Check test coverage | `npm run test:coverage` |
 | Check dependency security | `npm audit` |
 
 ## Testing
@@ -210,7 +211,7 @@ Automated tests run with **Node's built-in test runner** (`node:test`) plus `sup
 integration. The global `fetch` is mocked with `t.mock.method`, so the suite is fast,
 deterministic and works fully offline — **no network connection and no API key are required**.
 
-Current total: **34 tests** across five suites.
+Current total: **36 tests** across five suites.
 
 | File | Scope |
 | :--- | :--- |
@@ -222,8 +223,9 @@ Current total: **34 tests** across five suites.
 | `test/fixtures/` | Canned Goodreads XML and Open Library JSON responses shared by the suites. |
 
 ```sh
-npm test            # run the full suite once
-npm run test:watch  # re-run on file changes
+npm test             # run the full suite once
+npm run test:watch   # re-run on file changes
+npm run test:coverage  # built-in V8 coverage report (no extra dependency)
 ```
 
 ## API & Documentation
@@ -295,7 +297,7 @@ Successful results are cached in memory for **1 hour**, keyed by provider and id
   errors.
 - **In-memory caching** — successful author lookups are cached for one hour (lazy eviction,
   concurrent lookups share the in-flight request).
-- **Automated tests** — 34 offline tests across five suites using `node:test` built-in mocks
+- **Automated tests** — 36 offline tests across five suites using `node:test` built-in mocks
   (`t.mock.method`) and `supertest`; CI runs them on Node 20/22/24.
 - **Secrets hygiene** — `GOODREADS_API_KEY` is read from the environment (never hardcoded) and is
   only required for the legacy provider; `.env` is gitignored and `.env.example` documents the

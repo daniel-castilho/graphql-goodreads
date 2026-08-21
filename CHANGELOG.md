@@ -6,11 +6,19 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+### Added
+- `npm run test:coverage` — built-in V8 coverage report via
+  `node --test --experimental-test-coverage` (no new dependency).
+
 ### Changed
 - Docs reconciliation with the v1.0.0 state: `AGENTS.md` now describes the provider-based
   architecture (intro, Commands, Architecture, technical-debt list) and elevates doc sync to
   **GOLDEN RULE #1 — documentation never drifts**; the archived task prompt under `tasks/`
   carries a status banner marking its steps as implemented.
+- Test suite hardening: each GraphQL-layer scenario builds a fresh schema/provider instance
+  (no shared TTL cache between tests), the cache expiry test uses a deterministic frozen clock
+  (`t.mock.timers`) instead of real sleeps, and two HTTP routing tests were added (GET
+  fall-through to graphql-http, JSON content-type on POST). 34 → 36 tests.
 
 ## [1.0.0] - 2026-08-21
 
